@@ -1,0 +1,346 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+  <meta charset="UTF-8" />
+  <title>记账本</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self' https://gitee.com; img-src 'self' https://gitee.com data:; style-src 'self' 'unsafe-inline';">
+  <style>
+    :root { color-scheme: light dark; }
+    body { font-family: system-ui,Segoe UI,Roboto; margin:0; display:flex; height:100vh; }
+    body.dark { background:#1e1e1e; color:#ddd; }
+    header { padding:12px 20px; display:flex; align-items:center; gap:24px; border-bottom:1px solid #e1e1e1; }
+    body.dark header { border-color:#333; }
+    nav { display:flex; gap:12px; flex-wrap:wrap; }
+    nav button { padding:6px 14px; border:1px solid #ccc; background:#fff; cursor:pointer; border-radius:6px; }
+    body.dark nav button { background:#2a2a2a; color:#ddd; border-color:#444; }
+    nav button.active { background:#2563eb; color:#fff; }
+    #sidebar { width:260px; border-right:1px solid #e1e1e1; display:flex; flex-direction:column; }
+    body.dark #sidebar { border-color:#333; }
+    #main { flex:1; overflow:auto; }
+    .logo { font-size:20px; font-weight:600; }
+    .section { padding:24px; display:none; position:relative; min-height:100%; box-sizing:border-box; }
+    .section.active { display:block; }
+    h2 { margin-top:0; }
+    form label { display:flex; flex-direction:column; font-size:12px; }
+    .row { display:flex; gap:12px; flex-wrap:wrap; }
+    input, select, textarea { padding:6px; border:1px solid #ccc; border-radius:4px; font-size:14px; }
+    body.dark input, body.dark select, body.dark textarea { background:#2b2b2b; border-color:#444; color:#ddd; }
+    button.primary { background:#2563eb; color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; }
+    table { border-collapse:collapse; width:100%; margin-top:12px; }
+    th, td { border:1px solid #eee; padding:6px 8px; text-align:left; font-size:13px; }
+    body.dark th, body.dark td { border-color:#333; }
+    .muted { color:#666; font-size:12px; }
+    body.dark .muted { color:#888; }
+    .flex-between { display:flex; justify-content:space-between; align-items:center; }
+    .panel { border:1px solid #ddd; border-radius:8px; padding:12px; margin-bottom:16px; background:#fafafa; }
+    body.dark .panel { background:#242424; border-color:#333; }
+    .side-card { padding:12px; border-bottom:1px solid #eee; }
+    body.dark .side-card { border-color:#333; }
+    .tag { display:inline-block; padding:2px 6px; background:#e2e8f0; border-radius:4px; margin-right:4px; font-size:11px; }
+    body.dark .tag { background:#3a3a3a; }
+    /* 标签选择器 */
+    .tag-picker { display:flex; flex-wrap:wrap; gap:6px; border:1px solid #ccc; border-radius:6px; padding:6px; background:#fff; }
+    body.dark .tag-picker { border-color:#444; background:#2b2b2b; }
+    .tag-chip { display:inline-flex; align-items:center; gap:6px; padding:2px 8px; border-radius:16px; background:#2563eb; color:#fff; font-size:12px; }
+    .tag-chip button { border:none; background:transparent; color:#fff; cursor:pointer; font-size:12px; }
+    .tag-input { border:none; outline:none; min-width:120px; flex:1; background:transparent; color:inherit; }
+    .tag-suggest { position:relative; width:100%; }
+    .tag-suggest-list { position:absolute; z-index:20; background:#fff; border:1px solid #ddd; border-radius:6px; margin-top:4px; max-height:180px; overflow:auto; width:100%; display:none; }
+    .tag-suggest-item { padding:6px 8px; cursor:pointer; }
+    .tag-suggest-item:hover { background:#f3f4f6; }
+    body.dark .tag-suggest-list { background:#1f1f1f; border-color:#333; }
+    body.dark .tag-suggest-item:hover { background:#2a2a2a; }
+    /* 页面背景 */
+    #tab-home { background:url('./assets/home.png') center/cover no-repeat; }
+    #tab-bills { background:url('./assets/bills.png') center/cover no-repeat; }
+    #tab-search { background:url('./assets/search.png') center/cover no-repeat; }
+    #tab-settings { background:url('./assets/settings.png') center/cover no-repeat; }
+    .overlay { backdrop-filter: blur(4px); background: rgba(255,255,255,0.80); padding:16px; border-radius:12px; }
+    body.dark .overlay { background: rgba(30,30,30,0.75); }
+    /* 右上角登录/注册 */
+    #auth-actions { position:fixed; top:10px; right:12px; z-index:1000; font-size:13px; color:#666; }
+    body.dark #auth-actions { color:#aaa; }
+    #auth-actions button { background:transparent; border:1px solid #ccc; color:inherit; padding:4px 8px; border-radius:6px; cursor:pointer; margin-left:6px; }
+    body.dark #auth-actions button { border-color:#444; }
+    /* 弹窗 */
+    .backdrop { position:fixed; inset:0; background:rgba(0,0,0,0.35); z-index:1100; display:none; }
+    .modal { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:360px; max-width:92vw; background:#fff; color:#111; border:1px solid #ddd; border-radius:12px; padding:16px; z-index:1110; display:none; }
+    body.dark .modal { background:#1f1f1f; color:#ddd; border-color:#333; }
+    .modal header { font-weight:600; margin-bottom:10px; }
+    .modal .actions { display:flex; gap:8px; justify-content:flex-end; }
+    /* 未登录时显示面板但遮罩提示登录 */
+    body.guest .hide-if-guest { position:relative; opacity:0.55; }
+    body.guest .hide-if-guest::after {
+      content:"请先登录";
+      position:absolute; inset:0;
+      display:flex; align-items:center; justify-content:center;
+      font-size:20px; font-weight:600;
+      background:rgba(255,255,255,0.75);
+      backdrop-filter:blur(2px);
+      color:#333;
+      border:2px dashed #2563eb;
+      border-radius:12px;
+      pointer-events:none;
+    }
+    body.dark.guest .hide-if-guest::after {
+      background:rgba(30,30,30,0.65);
+      color:#ddd;
+      border-color:#1d4ed8;
+    }
+    /* 账单表格可独立滚动 */
+    .table-scroll {
+      max-height: 58vh;
+      overflow: auto;
+      border:1px solid #eee;
+      border-radius:8px;
+      background:#fff;
+    }
+    body.dark .table-scroll {
+      border-color:#333;
+      background:#1f1f1f;
+    }
+    /* 主页账户概览字体更小 */
+    #home-accounts th, #home-accounts td { font-size:12px; padding:4px 6px; }
+  </style>
+</head>
+<body>
+  <!-- 顶部右侧登录/注册 / 用户信息 -->
+  <div id="auth-actions">
+    <span id="auth-hint">未登录</span>
+    <button id="btn-open-login">登录</button>
+    <button id="btn-open-register">注册</button>
+    <span id="auth-user" style="display:none;"></span>
+    <button id="btn-logout" style="display:none;">退出</button>
+  </div>
+
+  <div id="sidebar">
+    <header>
+      <div class="logo">📒 Happy Packet</div>
+    </header>
+    <nav id="nav">
+      <button type="button" data-tab="home">主页</button>
+      <button type="button" data-tab="bills">账单页</button>
+      <button type="button" data-tab="search">查询页</button>
+      <button type="button" data-tab="settings">设置</button>
+    </nav>
+    <div class="side-card hide-if-guest" id="side-quick">
+      <h4>快速记账</h4>
+      <form id="form-add">
+        <label>日期 <input type="date" name="date" required></label>
+        <label>类型
+          <select name="type" id="type-select">
+            <option value="EXPENSE">支出</option>
+            <option value="INCOME">收入</option>
+          </select>
+        </label>
+        <label>金额 <input name="amount" type="number" step="0.01" required></label>
+        <label>账户
+          <select name="accountId" id="accountId"></select>
+        </label>
+        <label>标签
+          <div id="tag-picker" class="tag-picker">
+            <div id="tag-chips" class="chips"></div>
+            <input id="tag-input" class="tag-input" placeholder="输入后回车添加，最多 5 个">
+            <div class="tag-suggest">
+              <div id="tag-suggest-list" class="tag-suggest-list"></div>
+            </div>
+          </div>
+        </label>
+        <label>备注 <input name="note"></label>
+        <button class="primary" type="submit" style="margin-top:8px;">记一笔</button>
+        <div class="muted" id="add-status"></div>
+      </form>
+    </div>
+  </div>
+  <div id="main">
+    <!-- 主页 -->
+    <section id="tab-home" class="section active">
+      <div class="overlay">
+        <h2>主页</h2>
+        <div class="panel">
+          <div class="flex-between">
+            <div>
+              <strong id="user-welcome">欢迎</strong>
+              <p class="muted">登录后可快速记账并查看您的账单。</p>
+            </div>
+          </div>
+        </div>
+        <div class="panel hide-if-guest">
+          <h3>账户概览</h3>
+          <table id="home-accounts">
+            <thead>
+              <tr><th>账户</th><th>余额</th><th>累计收入</th><th>累计支出</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="panel hide-if-guest">
+          <h3>最近账单（Top 5）</h3>
+          <table id="home-recent">
+            <thead><tr><th>日期</th><th>类型</th><th>金额</th><th>账户</th><th>标签</th><th>备注</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="panel">
+          <h3>欢迎使用</h3>
+          <p class="muted">请登录以查看和管理您的个人账单数据。</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- 账单页 -->
+    <section id="tab-bills" class="section">
+      <div class="overlay">
+        <h2>账单页</h2>
+        <div class="panel hide-if-guest">
+          <h3>快速搜索</h3>
+          <div class="row" style="align-items:flex-end;">
+            <label style="flex:1 1 auto;">关键词
+              <input id="bills-keyword" placeholder="输入关键词后回车或点击搜索，结果跳转到查询页">
+            </label>
+            <button id="bills-search" class="primary" type="button">搜索</button>
+            <span class="muted" style="flex:1 1 100%;">提示：仅支持关键词，详细筛选请在查询页中操作。</span>
+          </div>
+        </div>
+        <div class="panel hide-if-guest">
+          <h3>已记账账户</h3>
+          <ul id="bills-accounts" class="muted"></ul>
+        </div>
+        <div class="panel hide-if-guest">
+          <h3>全部账单</h3>
+          <div class="table-scroll" id="bills-scroll">
+            <table id="bills-table">
+              <thead><tr>
+                <th>日期</th><th>类型</th><th>金额</th><th>账户</th><th>标签</th><th>备注</th><th>操作</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="panel hide-if-guest">
+          <h3>导入 / 导出</h3>
+          <div class="row">
+            <button id="exp-csv">导出 CSV</button>
+            <button id="exp-json">导出 JSON</button>
+          </div>
+          <textarea id="imp-csv" rows="5" style="width:100%;margin-top:8px;" placeholder="粘贴 CSV 进行导入（登录后可用）"></textarea>
+          <button id="imp-run" class="primary" style="margin-top:8px;">开始导入</button>
+          <pre id="imp-status" class="muted"></pre>
+        </div>
+        <!--<div class="panel">
+          <h3>提示</h3>
+          <p class="muted">可在此页快速按关键词跳转到查询页，或直接在左侧进行快速记账。</p>
+        </div>-->
+      </div>
+    </section>
+
+    <!-- 查询页 -->
+    <section id="tab-search" class="section">
+      <div class="overlay">
+        <h2>查询页</h2>
+        <div class="panel hide-if-guest">
+          <h3>高级查询</h3>
+          <div class="row">
+            <label>关键词 <input id="q-keyword" placeholder="关键词"></label>
+            <label>日期从 <input id="q-from" type="date"></label>
+            <label>到 <input id="q-to" type="date"></label>
+            <label>账户筛选
+              <select id="q-account"><option value="">全部</option></select>
+            </label>
+            <label>标签筛选
+              <select id="q-tag"><option value="">全部</option></select>
+            </label>
+            <button id="q-run" class="primary" type="button">查询</button>
+          </div>
+          <table id="q-table" style="margin-top:12px;">
+            <thead><tr><th>日期</th><th>类型</th><th>金额</th><th>账户</th><th>标签</th><th>备注</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <!--<div class="panel">
+          <h3>UI示例</h3>
+          <img src="https://gitee.com/happy0507/picture/raw/master/img//search.png" alt="查询页UI" style="max-width:100%;border:1px solid #ddd;border-radius:8px;">
+        </div>-->
+      </div>
+    </section>
+
+    <!-- 设置页 -->
+    <section id="tab-settings" class="section">
+      <div class="overlay">
+        <h2>设置</h2>
+        <div class="panel hide-if-guest">
+          <h3>个人资料</h3>
+          <form id="form-profile" style="display:flex;flex-wrap:wrap;gap:12px;">
+            <label style="flex:1 1 48%;">用户名
+              <input name="p_username" required>
+            </label>
+            <label style="flex:1 1 48%;">邮箱
+              <input name="p_email" placeholder="name@example.com">
+            </label>
+            <div id="profile-status" class="muted" style="flex:1 1 100%;"></div>
+            <button class="primary" type="submit">保存资料</button>
+          </form>
+        </div>
+        <div class="panel hide-if-guest">
+          <h3>修改密码</h3>
+            <form id="form-password" style="display:flex;flex-wrap:wrap;gap:12px;">
+              <label style="flex:1 1 100%;">原密码
+                <input type="password" name="old_password" required>
+              </label>
+              <label style="flex:1 1 100%;">新密码
+                <input type="password" name="new_password" required minlength="6" placeholder="至少6位">
+              </label>
+              <div id="pwd-status" class="muted" style="flex:1 1 100%;"></div>
+              <button class="primary" type="submit">修改密码</button>
+            </form>
+        </div>
+        <!--<div class="panel hide-if-guest">
+          <h3>账户昵称</h3>
+          <form id="form-accounts" style="display:flex;flex-direction:column;gap:12px;">
+            <div id="accounts-editor" style="display:flex;flex-wrap:wrap;gap:8px;"></div>
+            <div id="accounts-status" class="muted"></div>
+            <button class="primary" type="submit">保存昵称</button>
+          </form>
+        </div>-->
+        <div class="panel">
+          <h3>主题</h3>
+          <button id="toggle-theme">切换深/浅色</button>
+          <span class="muted" id="theme-status"></span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- 弹窗：登录 -->
+  <div id="modal-backdrop" class="backdrop"></div>
+  <div id="modal-login" class="modal">
+    <header>登录</header>
+    <form id="form-login" style="display:flex;gap:12px;flex-wrap:wrap;">
+      <label style="flex:1 1 100%;">用户名<input name="username" required></label>
+      <label style="flex:1 1 100%;">密码<input type="password" name="password" required></label>
+      <div class="actions" style="flex:1 1 100%;">
+        <button type="button" id="btn-cancel-login">取消</button>
+        <button type="submit" class="primary">登录</button>
+      </div>
+    </form>
+    <div class="muted" id="auth-status-login"></div>
+  </div>
+
+  <!-- 弹窗：注册 -->
+  <div id="modal-register" class="modal">
+    <header>注册</header>
+    <form id="form-register" style="display:flex;gap:12px;flex-wrap:wrap;">
+      <label style="flex:1 1 100%;">用户名<input name="r_username" required></label>
+      <label style="flex:1 1 100%;">邮箱<input name="r_email"></label>
+      <label style="flex:1 1 100%;">密码<input type="password" name="r_password" required></label>
+      <div class="actions" style="flex:1 1 100%;">
+        <button type="button" id="btn-cancel-register">取消</button>
+        <button type="submit" class="primary">注册</button>
+      </div>
+    </form>
+    <div class="muted" id="auth-status-register"></div>
+  </div>
+
+  <script src="./renderer.js"></script>
+</body>
+</html>
